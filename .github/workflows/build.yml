@@ -30,54 +30,8 @@ jobs:
           cp -r _tmp/android ./android
           rm -rf _tmp
 
-      - name: Patch AndroidManifest
-        working-directory: popstar_player
-        run: |
-          python3 - <<'PY'
-          p = 'android/app/src/main/AndroidManifest.xml'
-          s = open(p, encoding='utf-8').read()
-          perms = (
-              '<uses-permission android:name="android.permission.INTERNET"/>\n'
-              '    <uses-permission android:name="android.permission.READ_MEDIA_AUDIO"/>\n'
-              '    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32"/>\n'
-              '    '
-          )
-          s = s.replace('<application', perms + '<application', 1)
-          s = s.replace('android:label="popstar_player"', 'android:label="Popstar"')
-          open(p, 'w', encoding='utf-8').write(s)
-          PY
-
-      - name: Set minSdk 24
-        working-directory: popstar_player
-        run: |
-          grep -rl "flutter.minSdkVersion" android/app | xargs sed -i 's/flutter\.minSdkVersion/24/g'
-
-      - name: Force compileSdk 36 for all plugins
-        working-directory: popstar_player/android
-        run: |
-          if [ -f settings.gradle.kts ]; then
-          cat >> settings.gradle.kts <<'KTS'
-
-          gradle.afterProject {
-              val ext = this.extensions.findByName("android")
-              if (ext != null) {
-                  try {
-                      ext.javaClass.getMethod("compileSdkVersion", Int::class.javaPrimitiveType).invoke(ext, 36)
-                  } catch (e: Exception) {
-                      println("compileSdk override failed for ${this.name}: $e")
-                  }
-              }
-          }
-          KTS
-          else
-          cat >> settings.gradle <<'GRV'
-
-          gradle.afterProject { p ->
-              def ext = p.extensions.findByName('android')
-              if (ext != null) { ext.compileSdkVersion 36 }
-          }
-          GRV
-          fi
+      - name: Patch Android project
+        run: bash popstar_player/tools/patch_android.sh
 
       - name: Get packages
         working-directory: popstar_player
