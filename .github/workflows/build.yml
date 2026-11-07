@@ -1,0 +1,66 @@
+name: Build APK
+
+on:
+  push:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Unzip project
+        run: unzip -q popstar_player.zip
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Generate Android project
+        working-directory: popstar_player
+        run: |
+          flutter create --platforms=android --org com.popstar --project-name popstar_player _tmp
+          cp -r _tmp/android ./android
+          rm -rf _tmp
+
+      - name: Patch AndroidManifest
+        working-directory: popstar_player
+        run: |
+          python3 - <<'PY'
+          p = 'android/app/src/main/AndroidManifest.xml'
+          s = open(p, encoding='utf-8').read()
+          perms = (
+              '<uses-permission android:name="android.permission.INTERNET"/>\n'
+              '    <uses-permission android:name="android.permission.READ_MEDIA_AUDIO"/>\n'
+              '    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32"/>\n'
+              '    '
+          )
+          s = s.replace('<application', perms + '<application', 1)
+          s = s.replace('android:label="popstar_player"', 'android:label="Popstar"')
+          open(p, 'w', encoding='utf-8').write(s)
+          PY
+
+      - name: Set minSdk 24
+        working-directory: popstar_player
+        run: |
+          grep -rl "flutter.minSdkVersion" android/app | xargs sed -i 's/flutter\.minSdkVersion/24/g'
+
+      - name: Get packages
+        working-directory: popstar_player
+        run: flutter pub get
+
+      - name: Build release APK
+        working-directory: popstar_player
+        run: flutter build apk --release
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: popstar-apk
+          path: popstar_player/build/app/outputs/flutter-apk/app-release.apk
